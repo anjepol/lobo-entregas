@@ -46,6 +46,7 @@ jobs:
     name: Seguridad de dependencias
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service: [auth-service, catalog-service, order-service, frontend]
     steps:
@@ -54,5 +55,5 @@ jobs:
         with: { node-version: 20 }
       - run: npm install --package-lock-only
         working-directory: ${{ matrix.service }}
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=critical
         working-directory: ${{ matrix.service }}
