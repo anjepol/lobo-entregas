@@ -1,0 +1,102 @@
+name: CD
+
+# Se ejecuta cuando CI termina bien en staging o main
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [staging, main]
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: lobo-entregas
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & push de imágenes
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          for svc in auth-service catalog-service order-service frontend; do
+            IMG=$REGISTRY/$OWNER/lobo-entregas-$svc
+            docker build -t $IMG:${{ steps.meta.outputs.tag }} ./$svc
+            docker push $IMG:${{ steps.meta.outputs.tag }}
+          done
+
+  deploy-staging:
+    needs: publish
+    if: github.event.workflow_run.head_branch == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Configurar kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+      - name: Desplegar en staging
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          NS=${NAMESPACE}-staging
+          kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+          for f in k8s/0*.yaml k8s/*-service.yaml k8s/frontend.yaml; do
+            sed "s#namespace: lobo-entregas#namespace: $NS#; s#ghcr.io/OWNER#ghcr.io/$OWNER#" $f | kubectl apply -f -
+          done
+          for svc in auth-service catalog-service order-service frontend; do
+            kubectl -n $NS set image deployment/$svc $svc=$REGISTRY/$OWNER/lobo-entregas-$svc:${{ needs.publish.outputs.tag }}
+            kubectl -n $NS rollout status deployment/$svc --timeout=120s
+          done
+
+  deploy-production:
+    needs: publish
+    if: github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment: production   # configurar "Required reviewers" para despliegue controlado
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - name: Configurar kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+      - name: Aplicar manifiestos
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          for f in k8s/*.yaml; do sed "s#ghcr.io/OWNER#ghcr.io/$OWNER#" $f | kubectl apply -f -; done
+      - name: Actualizar imágenes y verificar
+        id: rollout
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          for svc in auth-service catalog-service order-service frontend; do
+            kubectl -n $NAMESPACE set image deployment/$svc $svc=$REGISTRY/$OWNER/lobo-entregas-$svc:${{ needs.publish.outputs.tag }}
+          done
+          for svc in auth-service catalog-service order-service frontend; do
+            kubectl -n $NAMESPACE rollout status deployment/$svc --timeout=120s
+          done
+      - name: Rollback automático
+        if: failure() && steps.rollout.conclusion == 'failure'
+        run: |
+          for svc in auth-service catalog-service order-service frontend; do
+            kubectl -n $NAMESPACE rollout undo deployment/$svc || true
+          done
+          echo "::error::Despliegue fallido: se revirtió a la versión estable anterior"

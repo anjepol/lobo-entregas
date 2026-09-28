@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f4f4f6; color: #1c1c1e; }
+main { max-width: 560px; margin: 0 auto; padding: 16px; }
+header { display: flex; justify-content: space-between; align-items: center; }
+.card { background: #fff; border-radius: 12px; padding: 14px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.row { display: flex; justify-content: space-between; align-items: center; }
+input, select { padding: 10px; border: 1px solid #d0d0d5; border-radius: 8px; font-size: 16px; }
+button { padding: 10px 14px; border: 0; border-radius: 8px; background: #2b4acb; color: #fff; font-size: 15px; cursor: pointer; }
+button:disabled { opacity: .4; }
+button.link { background: none; color: #2b4acb; }
+.error { color: #c0392b; margin: 0; }
+.note { background: #e8f0fe; padding: 8px 12px; border-radius: 8px; }

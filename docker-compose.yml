@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:7
+    volumes: [mongo-data:/data/db]
+  auth-service:
+    build: ./auth-service
+    environment: { MONGO_URL: "mongodb://mongo:27017/lobo_auth", JWT_SECRET: "dev-secret" }
+    ports: ["3001:3001"]
+    depends_on: [mongo]
+  catalog-service:
+    build: ./catalog-service
+    environment: { MONGO_URL: "mongodb://mongo:27017/lobo_catalog", JWT_SECRET: "dev-secret" }
+    ports: ["3002:3002"]
+    depends_on: [mongo]
+  order-service:
+    build: ./order-service
+    environment: { MONGO_URL: "mongodb://mongo:27017/lobo_orders", JWT_SECRET: "dev-secret" }
+    ports: ["3003:3003"]
+    depends_on: [mongo]
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_AUTH_URL: http://localhost:3001
+        VITE_CATALOG_URL: http://localhost:3002
+        VITE_ORDER_URL: http://localhost:3003
+    ports: ["8080:80"]
+volumes:
+  mongo-data:

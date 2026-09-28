@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  build-test:
+    name: Build & Test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [auth-service, catalog-service, order-service, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependencias
+        run: npm install
+      - name: Build (solo frontend)
+        if: matrix.service == 'frontend'
+        run: npm run build
+      - name: Pruebas
+        run: npm test
+
+  docker-build:
+    name: Docker build (${{ matrix.service }})
+    needs: build-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, catalog-service, order-service, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen (sin publicar)
+        run: docker build ./${{ matrix.service }}
+
+  audit:
+    name: Seguridad de dependencias
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [auth-service, catalog-service, order-service, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --package-lock-only
+        working-directory: ${{ matrix.service }}
+      - run: npm audit --audit-level=high
+        working-directory: ${{ matrix.service }}

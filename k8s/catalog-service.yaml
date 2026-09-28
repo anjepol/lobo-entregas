@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+  namespace: lobo-entregas
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: catalog-service }
+  template:
+    metadata:
+      labels: { app: catalog-service }
+    spec:
+      containers:
+        - name: catalog-service
+          image: ghcr.io/anjepol/lobo-entregas-catalog-service:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3002 }]
+          env:
+            - { name: MONGO_URL, value: "mongodb://mongo:27017/lobo_catalog" }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: lobo-secrets, key: JWT_SECRET } }
+          readinessProbe:
+            httpGet: { path: /health, port: 3002 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 3002 }
+            initialDelaySeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-service
+  namespace: lobo-entregas
+spec:
+  type: NodePort
+  selector: { app: catalog-service }
+  ports: [{ port: 3002, targetPort: 3002, nodePort: 30002 }]

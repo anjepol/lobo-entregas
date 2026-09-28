@@ -1,0 +1,4 @@
+# Reemplazar con los usuarios reales de GitHub
+/.github/   @devops-usuario
+/k8s/       @devops-usuario
+/frontend/  @frontend-usuario
