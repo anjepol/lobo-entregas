@@ -1,9 +1,12 @@
 name: CodeQL
 
-# Manual: en repos privados con cuenta gratuita requiere licencia.
-# Al hacerlo público o activar Code Security, cambia a push/pull_request.
 on:
-  workflow_dispatch:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+  schedule:
+    - cron: '0 6 * * 1'
 
 jobs:
   analyze:
